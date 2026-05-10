@@ -1,0 +1,16 @@
+[package]
+name = "sesame"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+confique.workspace = true
+dialoguer.workspace = true
+dirs.workspace = true
+http.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+sesame-model = { path = "../model" }
+toml.workspace = true
