@@ -7,9 +7,9 @@ edition.workspace = true
 anyhow.workspace = true
 clap.workspace = true
 confique.workspace = true
-dialoguer.workspace = true
 dirs.workspace = true
 http.workspace = true
+inquire.workspace = true
 reqwest.workspace = true
 serde.workspace = true
 sesame-model = { path = "../model" }

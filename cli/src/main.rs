@@ -7,7 +7,7 @@ use anyhow::{Context, bail};
 use clap::{Parser, Subcommand};
 use client::Client;
 use config::Config;
-use dialoguer::{Password, Select, theme::ColorfulTheme};
+use inquire::{Password, Select};
 
 /// A secret manager.
 ///
@@ -97,9 +97,9 @@ fn resolve_secret_value(value: Option<String>, stdin: bool) -> anyhow::Result<St
         (Some(_), true) => bail!("pass either a value argument or --stdin, not both"),
         (Some(value), false) => Ok(value),
         (None, true) => read_stdin(),
-        (None, false) => Password::with_theme(&ColorfulTheme::default())
-            .with_prompt("Secret value")
-            .interact()
+        (None, false) => Password::new("Secret value")
+            .without_confirmation()
+            .prompt()
             .context("failed to read secret value"),
     }
 }
@@ -141,9 +141,9 @@ fn get(name: String) -> anyhow::Result<()> {
 fn login(url: Option<String>) -> anyhow::Result<()> {
     let mut config = Config::load()?;
 
-    let password = Password::with_theme(&ColorfulTheme::default())
-        .with_prompt("Sesame password")
-        .interact()
+    let password = Password::new("Sesame password")
+        .without_confirmation()
+        .prompt()
         .context("failed to read password")?;
 
     if password.is_empty() {
@@ -165,26 +165,20 @@ fn login(url: Option<String>) -> anyhow::Result<()> {
 /// Browse secrets using an interactive dialog.
 fn browse() -> anyhow::Result<()> {
     let client = configured_client()?;
-    let theme = ColorfulTheme::default();
 
     loop {
         let output = client.list_secrets()?;
 
         let items = output.secrets;
+        if items.is_empty() {
+            bail!("there are no secrets to browse");
+        }
 
-        let selection = Select::with_theme(&theme)
-            .with_prompt("Select a secret")
-            .items(&items)
-            .default(0)
-            .interact()
+        let name = Select::new("Select a secret", items)
+            .prompt()
             .context("failed to read selection")?;
 
-        match items.get(selection).map(String::as_str) {
-            Some(name) => {
-                let secret = client.get_secret(name)?;
-                println!("{}", secret.value);
-            }
-            None => bail!("invalid selection"),
-        }
+        let secret = client.get_secret(&name)?;
+        println!("{}", secret.value);
     }
 }
