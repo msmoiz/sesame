@@ -60,13 +60,21 @@ pub struct PublishSecretInput {
     pub value: String,
 }
 
+/// The input for the health operation.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct HealthInput {}
+
+/// The output for the health operation.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct HealthOutput {}
+
 /// The output for the publish secret operation.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
-pub struct PublishSecretOutput;
+pub struct PublishSecretOutput {}
 
 /// The input for the list secrets operation.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
-pub struct ListSecretsInput;
+pub struct ListSecretsInput {}
 
 /// The output for the list secrets operation.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
