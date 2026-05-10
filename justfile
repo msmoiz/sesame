@@ -3,7 +3,7 @@ default:
     @just --list
 
 # Runs the sesame server locally.
-server:
+develop:
     cargo run -p sesame-server
 
 # Lists secrets through the CLI.
