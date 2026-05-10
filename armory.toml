@@ -1,0 +1,15 @@
+[package]
+name = "sesame"
+version = "0.1.0"
+
+[[targets]]
+triple = "x86_64_linux"
+path = "target/x86_64-unknown-linux-musl/release/sesame"
+
+[[targets]]
+triple = "x86_64_windows"
+path = "target/x86_64-pc-windows-msvc/release/sesame.exe"
+
+[[targets]]
+triple = "aarch64_darwin"
+path = "target/aarch64-apple-darwin/release/sesame"
