@@ -1,6 +1,6 @@
 [package]
 name = "sesame"
-version = "1.0.0"
+version = "1.1.0"
 
 [[targets]]
 triple = "x86_64_linux"
