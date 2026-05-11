@@ -19,6 +19,8 @@ pub enum ApiError {
     PasswordMissing,
     #[error("password is invalid")]
     PasswordInvalid,
+    #[error("secret value encoding is invalid")]
+    InvalidEncoding,
     #[error("secret name is invalid")]
     InvalidSecretName,
     #[error("secret already exists")]
@@ -34,6 +36,7 @@ impl ApiError {
         match self {
             Self::PasswordMissing => "password_missing",
             Self::PasswordInvalid => "password_invalid",
+            Self::InvalidEncoding => "invalid_encoding",
             Self::InvalidSecretName => "invalid_secret_name",
             Self::SecretAlreadyExists => "secret_already_exists",
             Self::SecretNotFound => "secret_not_found",

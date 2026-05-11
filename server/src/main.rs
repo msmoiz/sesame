@@ -12,11 +12,12 @@ use axum::{
     response::{IntoResponse, Response},
     routing::post,
 };
+use base64::{Engine, prelude::BASE64_STANDARD};
 use fjall::{Database, Keyspace, KeyspaceCreateOptions, PersistMode};
 use sesame_model::{
-    ApiError, DeleteSecretInput, DeleteSecretOutput, ErrorInfo, GetSecretInput, GetSecretOutput,
-    HealthInput, HealthOutput, ListSecretsInput, ListSecretsOutput, PASSWORD_HEADER,
-    PublishSecretInput, PublishSecretOutput,
+    ApiError, DeleteSecretInput, DeleteSecretOutput, Encoding, ErrorInfo, GetSecretInput,
+    GetSecretOutput, HealthInput, HealthOutput, ListSecretsInput, ListSecretsOutput,
+    PASSWORD_HEADER, PublishSecretInput, PublishSecretOutput,
 };
 use tokio::time;
 use tower_http::trace::TraceLayer;
@@ -25,6 +26,12 @@ use tracing_subscriber::EnvFilter;
 
 /// The keyspace for secrets within the database.
 const SECRET_KEYSPACE: &str = "secrets";
+/// The keyspace for database metadata.
+const META_KEYSPACE: &str = "meta";
+/// The current storage migration version.
+const STORAGE_MIGRATION_VERSION: &[u8] = b"2";
+/// The key for the storage migration version.
+const STORAGE_MIGRATION_VERSION_KEY: &[u8] = b"storage_migration_version";
 
 /// The application state.
 #[derive(Clone)]
@@ -58,7 +65,11 @@ async fn main() -> Result<()> {
         .keyspace(SECRET_KEYSPACE, KeyspaceCreateOptions::default)
         .context("failed to open secrets keyspace")?;
 
-    migrate_legacy_secrets(&secrets).context("failed to migrate legacy secrets")?;
+    let meta = database
+        .keyspace(META_KEYSPACE, KeyspaceCreateOptions::default)
+        .context("failed to open metadata keyspace")?;
+
+    migrate_secrets(&secrets, &meta).context("failed to migrate stored secrets")?;
 
     info!("database_path = {}", db_path.display());
     info!("listening_on = {}", address);
@@ -143,9 +154,16 @@ fn log_internal(error: impl std::fmt::Debug) -> ApiError {
     ApiError::InternalError
 }
 
-/// Migrates legacy secrets that were stored as plain UTF-8 bytes.
-fn migrate_legacy_secrets(secrets: &Keyspace) -> Result<()> {
-    use sesame_model::Encoding;
+/// Migrates secrets to the canonical structured storage format.
+fn migrate_secrets(secrets: &Keyspace, meta: &Keyspace) -> Result<()> {
+    if let Some(version) = meta
+        .get(STORAGE_MIGRATION_VERSION_KEY)
+        .context("failed to read storage migration version")?
+    {
+        if version.as_ref() == STORAGE_MIGRATION_VERSION {
+            return Ok(());
+        }
+    }
 
     let mut migrated = 0usize;
 
@@ -154,7 +172,32 @@ fn migrate_legacy_secrets(secrets: &Keyspace) -> Result<()> {
             .into_inner()
             .context("failed to read secret entry during migration")?;
 
-        if serde_json::from_slice::<db::Secret>(&value).is_ok() {
+        if let Ok(secret) = serde_json::from_slice::<db::Secret>(&value) {
+            if secret.encoding != Encoding::Binary {
+                continue;
+            }
+
+            let Ok(encoded) = String::from_utf8(secret.value.clone()) else {
+                continue;
+            };
+
+            let Ok(decoded) = BASE64_STANDARD.decode(encoded.as_bytes()) else {
+                continue;
+            };
+
+            let migrated_secret = db::Secret {
+                value: decoded,
+                encoding: Encoding::Binary,
+            };
+
+            let raw = serde_json::to_vec(&migrated_secret)
+                .context("failed to serialize migrated binary secret value")?;
+
+            secrets
+                .insert(key.to_vec(), raw)
+                .context("failed to write migrated binary secret value")?;
+
+            migrated += 1;
             continue;
         }
 
@@ -183,6 +226,12 @@ fn migrate_legacy_secrets(secrets: &Keyspace) -> Result<()> {
 
         migrated += 1;
     }
+
+    meta.insert(
+        STORAGE_MIGRATION_VERSION_KEY,
+        STORAGE_MIGRATION_VERSION.to_vec(),
+    )
+    .context("failed to store storage migration version")?;
 
     if migrated > 0 {
         info!(
@@ -236,6 +285,7 @@ async fn publish_secret(
         Ok(output) => ApiResponse::ok(StatusCode::CREATED, output),
         Err(error) => {
             let status = match error {
+                ApiError::InvalidEncoding => StatusCode::BAD_REQUEST,
                 ApiError::InvalidSecretName => StatusCode::BAD_REQUEST,
                 ApiError::SecretAlreadyExists => StatusCode::CONFLICT,
                 ApiError::InternalError => StatusCode::INTERNAL_SERVER_ERROR,
@@ -258,8 +308,15 @@ fn publish_secret_inner(
         return Err(ApiError::SecretAlreadyExists);
     }
 
+    let value = match input.encoding {
+        Encoding::Text => input.value.into_bytes(),
+        Encoding::Binary => BASE64_STANDARD
+            .decode(input.value.as_bytes())
+            .map_err(|_| ApiError::InvalidEncoding)?,
+    };
+
     let secret = db::Secret {
-        value: input.value.into_bytes(),
+        value,
         encoding: input.encoding,
     };
 
@@ -326,9 +383,14 @@ fn get_secret_inner(state: &AppState, input: GetSecretInput) -> Result<GetSecret
     let secret: db::Secret =
         serde_json::from_slice(&value.to_vec()).map_err(|_| ApiError::InternalError)?;
 
+    let value = match secret.encoding {
+        Encoding::Text => String::from_utf8(secret.value).map_err(log_internal)?,
+        Encoding::Binary => BASE64_STANDARD.encode(secret.value),
+    };
+
     Ok(GetSecretOutput {
         name: input.name,
-        value: String::from_utf8(secret.value).map_err(log_internal)?,
+        value,
         encoding: secret.encoding,
     })
 }
