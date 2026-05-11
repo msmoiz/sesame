@@ -1,4 +1,5 @@
 mod config;
+mod db;
 
 use std::{net::SocketAddr, path::PathBuf, time::Duration};
 
@@ -204,9 +205,16 @@ fn publish_secret_inner(
         return Err(ApiError::SecretAlreadyExists);
     }
 
+    let secret = db::Secret {
+        value: input.value.into_bytes(),
+        encoding: input.encoding,
+    };
+
+    let raw = serde_json::to_vec(&secret).map_err(log_internal)?;
+
     state
         .secrets
-        .insert(input.name.as_bytes(), input.value.as_bytes())
+        .insert(input.name.as_bytes(), raw)
         .map_err(log_internal)?;
 
     Ok(PublishSecretOutput {})
@@ -262,11 +270,13 @@ fn get_secret_inner(state: &AppState, input: GetSecretInput) -> Result<GetSecret
         return Err(ApiError::SecretNotFound);
     };
 
-    let value = String::from_utf8(value.to_vec()).map_err(|_| ApiError::InternalError)?;
+    let secret: db::Secret =
+        serde_json::from_slice(&value.to_vec()).map_err(|_| ApiError::InternalError)?;
 
     Ok(GetSecretOutput {
         name: input.name,
-        value,
+        value: String::from_utf8(secret.value).map_err(log_internal)?,
+        encoding: secret.encoding,
     })
 }
 

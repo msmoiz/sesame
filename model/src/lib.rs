@@ -51,6 +51,16 @@ impl From<ApiError> for ErrorInfo {
     }
 }
 
+/// The encoding of a secret.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum Encoding {
+    /// A text string in UTF-8.
+    Text,
+    /// A binary blob.
+    Binary,
+}
+
 /// The input for the publish secret operation.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct PublishSecretInput {
@@ -58,6 +68,8 @@ pub struct PublishSecretInput {
     pub name: String,
     /// The value of the secret.
     pub value: String,
+    /// The encoding of the secret.
+    pub encoding: Encoding,
 }
 
 /// The input for the health operation.
@@ -97,6 +109,8 @@ pub struct GetSecretOutput {
     pub name: String,
     /// The value of the secret.
     pub value: String,
+    /// The encoding of the secret.
+    pub encoding: Encoding,
 }
 
 /// The input for the delete secret operation.
