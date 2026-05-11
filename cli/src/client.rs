@@ -2,8 +2,8 @@ use anyhow::{Context, bail};
 use reqwest::blocking::Client as HttpClient;
 use reqwest::header::{CONTENT_TYPE, HeaderMap, HeaderValue};
 use sesame_model::{
-    ErrorInfo, GetSecretInput, GetSecretOutput, ListSecretsInput, ListSecretsOutput,
-    PASSWORD_HEADER, PublishSecretInput, PublishSecretOutput,
+    DeleteSecretInput, DeleteSecretOutput, ErrorInfo, GetSecretInput, GetSecretOutput,
+    ListSecretsInput, ListSecretsOutput, PASSWORD_HEADER, PublishSecretInput, PublishSecretOutput,
 };
 
 /// The API client.
@@ -24,6 +24,18 @@ impl Client {
             password,
             http: HttpClient::new(),
         }
+    }
+
+    /// Returns the headers for a request.
+    fn headers(&self) -> anyhow::Result<HeaderMap> {
+        let password = HeaderValue::from_str(&self.password)
+            .context("password contains invalid characters")?;
+
+        let mut headers = HeaderMap::new();
+        headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+        headers.insert(PASSWORD_HEADER, password);
+
+        Ok(headers)
     }
 
     /// Publishes a secret to the store.
@@ -70,16 +82,19 @@ impl Client {
         decode_response(response)
     }
 
-    /// Returns the headers for a request.
-    fn headers(&self) -> anyhow::Result<HeaderMap> {
-        let password = HeaderValue::from_str(&self.password)
-            .context("password contains invalid characters")?;
+    /// Deletes a secret from the store.
+    pub fn delete_secret(&self, name: &str) -> anyhow::Result<DeleteSecretOutput> {
+        let response = self
+            .http
+            .post(format!("{}/delete-secret", self.base_url))
+            .headers(self.headers()?)
+            .json(&DeleteSecretInput {
+                name: name.to_owned(),
+            })
+            .send()
+            .with_context(|| format!("failed to delete secret {name}"))?;
 
-        let mut headers = HeaderMap::new();
-        headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
-        headers.insert(PASSWORD_HEADER, password);
-
-        Ok(headers)
+        decode_response(response)
     }
 }
 
