@@ -241,7 +241,16 @@ fn browse() -> anyhow::Result<()> {
         };
 
         let secret = client.get_secret(&name)?;
+
+        if !secret.value.starts_with("\n") {
+            println!("\n");
+        }
+
         println!("{}", secret.value);
+
+        if !secret.value.ends_with("\n") {
+            println!("\n");
+        }
     }
 
     Ok(())
