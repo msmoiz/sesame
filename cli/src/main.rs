@@ -13,7 +13,7 @@ use base64::prelude::*;
 use clap::{Parser, Subcommand};
 use client::Client;
 use config::Config;
-use inquire::{InquireError, Password, Select, error::InquireResult};
+use inquire::{InquireError, Password, Select};
 use sesame_model::Encoding;
 
 /// A secret manager.
