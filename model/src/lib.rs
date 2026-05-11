@@ -19,6 +19,8 @@ pub enum ApiError {
     PasswordMissing,
     #[error("password is invalid")]
     PasswordInvalid,
+    #[error("secret value encoding is invalid")]
+    InvalidEncoding,
     #[error("secret name is invalid")]
     InvalidSecretName,
     #[error("secret already exists")]
@@ -34,6 +36,7 @@ impl ApiError {
         match self {
             Self::PasswordMissing => "password_missing",
             Self::PasswordInvalid => "password_invalid",
+            Self::InvalidEncoding => "invalid_encoding",
             Self::InvalidSecretName => "invalid_secret_name",
             Self::SecretAlreadyExists => "secret_already_exists",
             Self::SecretNotFound => "secret_not_found",
@@ -51,6 +54,16 @@ impl From<ApiError> for ErrorInfo {
     }
 }
 
+/// The encoding of a secret.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum Encoding {
+    /// A text string in UTF-8.
+    Text,
+    /// A binary blob.
+    Binary,
+}
+
 /// The input for the publish secret operation.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct PublishSecretInput {
@@ -58,6 +71,8 @@ pub struct PublishSecretInput {
     pub name: String,
     /// The value of the secret.
     pub value: String,
+    /// The encoding of the secret.
+    pub encoding: Encoding,
 }
 
 /// The input for the health operation.
@@ -97,6 +112,8 @@ pub struct GetSecretOutput {
     pub name: String,
     /// The value of the secret.
     pub value: String,
+    /// The encoding of the secret.
+    pub encoding: Encoding,
 }
 
 /// The input for the delete secret operation.

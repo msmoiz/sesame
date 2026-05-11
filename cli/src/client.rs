@@ -2,7 +2,7 @@ use anyhow::{Context, bail};
 use reqwest::blocking::Client as HttpClient;
 use reqwest::header::{CONTENT_TYPE, HeaderMap, HeaderValue};
 use sesame_model::{
-    DeleteSecretInput, DeleteSecretOutput, ErrorInfo, GetSecretInput, GetSecretOutput,
+    DeleteSecretInput, DeleteSecretOutput, Encoding, ErrorInfo, GetSecretInput, GetSecretOutput,
     ListSecretsInput, ListSecretsOutput, PASSWORD_HEADER, PublishSecretInput, PublishSecretOutput,
 };
 
@@ -39,7 +39,12 @@ impl Client {
     }
 
     /// Publishes a secret to the store.
-    pub fn publish_secret(&self, name: &str, value: &str) -> anyhow::Result<PublishSecretOutput> {
+    pub fn publish_secret(
+        &self,
+        name: &str,
+        value: &str,
+        encoding: Encoding,
+    ) -> anyhow::Result<PublishSecretOutput> {
         let response = self
             .http
             .post(format!("{}/publish-secret", self.base_url))
@@ -47,6 +52,7 @@ impl Client {
             .json(&PublishSecretInput {
                 name: name.to_owned(),
                 value: value.to_owned(),
+                encoding,
             })
             .send()
             .context("failed to publish secret")?;

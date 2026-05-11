@@ -14,6 +14,7 @@ use clap::{Parser, Subcommand};
 use client::Client;
 use config::Config;
 use inquire::{Password, Select};
+use sesame_model::Encoding;
 
 /// A secret manager.
 ///
@@ -99,8 +100,8 @@ fn configured_client() -> anyhow::Result<Client> {
 /// Publishes a secret to the store.
 fn publish(name: String, value: Option<String>, stdin: bool) -> anyhow::Result<()> {
     let client = configured_client()?;
-    let (name, value) = resolve_secret_params(name, value, stdin)?;
-    client.publish_secret(&name, &value)?;
+    let (name, value, encoding) = resolve_secret_params(name, value, stdin)?;
+    client.publish_secret(&name, &value, encoding)?;
     Ok(())
 }
 
@@ -115,7 +116,7 @@ fn resolve_secret_params(
     name: String,
     value: Option<String>,
     stdin: bool,
-) -> anyhow::Result<(String, String)> {
+) -> anyhow::Result<(String, String, Encoding)> {
     match (name.strip_prefix("@"), value, stdin) {
         (Some(path), ..) => {
             let path = PathBuf::from_str(path).context("failed to parse secret file path")?;
@@ -126,26 +127,26 @@ fn resolve_secret_params(
                 .to_string_lossy()
                 .to_string();
 
-            let value = {
+            let (value, encoding) = {
                 let bytes = fs::read(path).context("failed to read secret file content")?;
                 match String::from_utf8(bytes.clone()) {
-                    Ok(value) => value,
-                    Err(_) => BASE64_STANDARD.encode(&bytes),
+                    Ok(value) => (value, Encoding::Text),
+                    Err(_) => (BASE64_STANDARD.encode(&bytes), Encoding::Binary),
                 }
             };
 
-            Ok((name, value))
+            Ok((name, value, encoding))
         }
         (_, Some(_), true) => bail!("pass either a value argument or --stdin, not both"),
-        (_, Some(value), false) => Ok((name, value)),
-        (_, _, true) => Ok((name, read_stdin()?)),
+        (_, Some(value), false) => Ok((name, value, Encoding::Text)),
+        (_, _, true) => Ok((name, read_stdin()?, Encoding::Text)),
         (_, _, false) => {
             let value = Password::new("Secret value")
                 .without_confirmation()
                 .prompt()
                 .context("failed to read secret value")?;
 
-            Ok((name, value))
+            Ok((name, value, Encoding::Text))
         }
     }
 }
