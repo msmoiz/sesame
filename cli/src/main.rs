@@ -13,7 +13,7 @@ use base64::prelude::*;
 use clap::{Parser, Subcommand};
 use client::Client;
 use config::Config;
-use inquire::{Password, Select};
+use inquire::{InquireError, Password, Select, error::InquireResult};
 use sesame_model::Encoding;
 
 /// A secret manager.
@@ -234,13 +234,26 @@ fn browse() -> anyhow::Result<()> {
             bail!("there are no secrets to browse");
         }
 
-        let name = Select::new("Select a secret", items)
-            .prompt()
-            .context("failed to read selection")?;
+        let name = match Select::new("Select a secret", items).prompt() {
+            Ok(name) => name,
+            Err(InquireError::OperationCanceled) => break,
+            Err(e) => bail!("failed to read selection: {e:?}"),
+        };
 
         let secret = client.get_secret(&name)?;
+
+        if !secret.value.starts_with("\n") {
+            println!("\n");
+        }
+
         println!("{}", secret.value);
+
+        if !secret.value.ends_with("\n") {
+            println!("\n");
+        }
     }
+
+    Ok(())
 }
 
 /// Deletes a secret from the store.
