@@ -9,6 +9,7 @@ use std::{
 };
 
 use anyhow::{Context, anyhow, bail};
+use base64::prelude::*;
 use clap::{Parser, Subcommand};
 use client::Client;
 use config::Config;
@@ -38,7 +39,8 @@ enum Command {
         /// The name of the secret. If the name starts with `@`, it is
         /// interpreted as a file path instead. In that case, the filename is
         /// used as the secret name and its contents are used as the secret
-        /// value.
+        /// value. If the file content cannot be parsed as UTF-8, it is
+        /// interpreted as binary content and stored using base64 encoding.
         name: String,
         /// The value of the secret.
         value: Option<String>,
@@ -118,7 +120,13 @@ fn resolve_secret_params(
                 .to_string_lossy()
                 .to_string();
 
-            let value = fs::read_to_string(path).context("failed to read secret file content")?;
+            let value = {
+                let bytes = fs::read(path).context("failed to read secret file content")?;
+                match String::from_utf8(bytes.clone()) {
+                    Ok(value) => value,
+                    Err(_) => BASE64_STANDARD.encode(&bytes),
+                }
+            };
 
             Ok((name, value))
         }
