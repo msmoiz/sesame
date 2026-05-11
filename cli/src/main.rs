@@ -1,9 +1,14 @@
 mod client;
 mod config;
 
-use std::io::{self, Read};
+use std::{
+    fs,
+    io::{self, Read},
+    path::PathBuf,
+    str::FromStr,
+};
 
-use anyhow::{Context, bail};
+use anyhow::{Context, anyhow, bail};
 use clap::{Parser, Subcommand};
 use client::Client;
 use config::Config;
@@ -30,7 +35,10 @@ struct Cli {
 enum Command {
     /// Store a new secret.
     Publish {
-        /// The name of the secret.
+        /// The name of the secret. If the name starts with `@`, it is
+        /// interpreted as a file path instead. In that case, the filename is
+        /// used as the secret name and its contents are used as the secret
+        /// value.
         name: String,
         /// The value of the secret.
         value: Option<String>,
@@ -83,24 +91,48 @@ fn configured_client() -> anyhow::Result<Client> {
 /// Publishes a secret to the store.
 fn publish(name: String, value: Option<String>, stdin: bool) -> anyhow::Result<()> {
     let client = configured_client()?;
-    let value = resolve_secret_value(value, stdin)?;
+    let (name, value) = resolve_secret_params(name, value, stdin)?;
     client.publish_secret(&name, &value)?;
     Ok(())
 }
 
-/// Resolves a secret value.
+/// Resolves secret params.
 ///
-/// If `value` is set, it uses that. Otherwise, if `stdin` is set, it reads the
-/// password from standard input. If both are set, this method returns an error.
-fn resolve_secret_value(value: Option<String>, stdin: bool) -> anyhow::Result<String> {
-    match (value, stdin) {
-        (Some(_), true) => bail!("pass either a value argument or --stdin, not both"),
-        (Some(value), false) => Ok(value),
-        (None, true) => read_stdin(),
-        (None, false) => Password::new("Secret value")
-            .without_confirmation()
-            .prompt()
-            .context("failed to read secret value"),
+/// If `name` starts with `@`, it is interpreted as a file path. In that case,
+/// the file name is treated as the secret name, and the file content is treated
+/// as its value. If `value` is set, it uses that. Otherwise, if `stdin` is set,
+/// it reads the password from standard input. If multiple options are set, this
+/// method returns an error.
+fn resolve_secret_params(
+    name: String,
+    value: Option<String>,
+    stdin: bool,
+) -> anyhow::Result<(String, String)> {
+    match (name.strip_prefix("@"), value, stdin) {
+        (Some(path), ..) => {
+            let path = PathBuf::from_str(path).context("failed to parse secret file path")?;
+
+            let name = path
+                .file_name()
+                .ok_or(anyhow!("missing file name"))?
+                .to_string_lossy()
+                .to_string();
+
+            let value = fs::read_to_string(path).context("failed to read secret file content")?;
+
+            Ok((name, value))
+        }
+        (_, Some(_), true) => bail!("pass either a value argument or --stdin, not both"),
+        (_, Some(value), false) => Ok((name, value)),
+        (_, _, true) => Ok((name, read_stdin()?)),
+        (_, _, false) => {
+            let value = Password::new("Secret value")
+                .without_confirmation()
+                .prompt()
+                .context("failed to read secret value")?;
+
+            Ok((name, value))
+        }
     }
 }
 
