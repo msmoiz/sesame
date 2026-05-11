@@ -98,3 +98,14 @@ pub struct GetSecretOutput {
     /// The value of the secret.
     pub value: String,
 }
+
+/// The input for the delete secret operation.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct DeleteSecretInput {
+    /// The name of the secret.
+    pub name: String,
+}
+
+/// The output of the delete secret operation.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct DeleteSecretOutput {}

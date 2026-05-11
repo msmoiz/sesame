@@ -13,8 +13,9 @@ use axum::{
 };
 use fjall::{Database, Keyspace, KeyspaceCreateOptions, PersistMode};
 use sesame_model::{
-    ApiError, ErrorInfo, GetSecretInput, GetSecretOutput, HealthInput, HealthOutput,
-    ListSecretsInput, ListSecretsOutput, PASSWORD_HEADER, PublishSecretInput, PublishSecretOutput,
+    ApiError, DeleteSecretInput, DeleteSecretOutput, ErrorInfo, GetSecretInput, GetSecretOutput,
+    HealthInput, HealthOutput, ListSecretsInput, ListSecretsOutput, PASSWORD_HEADER,
+    PublishSecretInput, PublishSecretOutput,
 };
 use tokio::time;
 use tower_http::trace::TraceLayer;
@@ -72,6 +73,7 @@ async fn main() -> Result<()> {
         .route("/publish-secret", post(publish_secret))
         .route("/list-secrets", post(list_secrets))
         .route("/get-secret", post(get_secret))
+        .route("/delete-secret", post(delete_secret))
         .with_state(state.clone())
         .layer(middleware::from_fn_with_state(state, authenticate))
         .layer(TraceLayer::new_for_http());
@@ -129,6 +131,36 @@ async fn authenticate(
         Some(password) if password == state.password => next.run(request).await,
         Some(_) => ApiResponse::error(StatusCode::UNAUTHORIZED, ApiError::PasswordInvalid),
         None => ApiResponse::error(StatusCode::UNAUTHORIZED, ApiError::PasswordMissing),
+    }
+}
+
+/// Logs an internal error.
+fn log_internal(error: impl std::fmt::Debug) -> ApiError {
+    error!(?error, "internal server error");
+    ApiError::InternalError
+}
+
+/// An API response.
+struct ApiResponse;
+
+impl ApiResponse {
+    /// Creates a success response.
+    fn ok<T>(status: StatusCode, body: T) -> Response
+    where
+        T: serde::Serialize,
+    {
+        (status, Json(body)).into_response()
+    }
+
+    /// Creates an error response.
+    fn error(status: StatusCode, error: ApiError) -> Response {
+        let body: ErrorInfo = error.into();
+        let mut response = (status, Json(body)).into_response();
+        response.headers_mut().insert(
+            http::header::CONTENT_TYPE,
+            HeaderValue::from_static("application/json"),
+        );
+        response
     }
 }
 
@@ -238,32 +270,28 @@ fn get_secret_inner(state: &AppState, input: GetSecretInput) -> Result<GetSecret
     })
 }
 
-/// Logs an internal error.
-fn log_internal(error: impl std::fmt::Debug) -> ApiError {
-    error!(?error, "internal server error");
-    ApiError::InternalError
+/// Deletes a secret from the store.
+async fn delete_secret(
+    State(state): State<AppState>,
+    Json(input): Json<DeleteSecretInput>,
+) -> Response {
+    match delete_secret_inner(&state, input) {
+        Ok(output) => ApiResponse::ok(StatusCode::OK, output),
+        Err(error) => {
+            let status = match error {
+                ApiError::SecretNotFound => StatusCode::NOT_FOUND,
+                ApiError::InternalError => StatusCode::INTERNAL_SERVER_ERROR,
+                _ => StatusCode::BAD_REQUEST,
+            };
+            ApiResponse::error(status, error)
+        }
+    }
 }
 
-/// An API response.
-struct ApiResponse;
-
-impl ApiResponse {
-    /// Creates a success response.
-    fn ok<T>(status: StatusCode, body: T) -> Response
-    where
-        T: serde::Serialize,
-    {
-        (status, Json(body)).into_response()
-    }
-
-    /// Creates an error response.
-    fn error(status: StatusCode, error: ApiError) -> Response {
-        let body: ErrorInfo = error.into();
-        let mut response = (status, Json(body)).into_response();
-        response.headers_mut().insert(
-            http::header::CONTENT_TYPE,
-            HeaderValue::from_static("application/json"),
-        );
-        response
-    }
+fn delete_secret_inner(
+    state: &AppState,
+    input: DeleteSecretInput,
+) -> Result<DeleteSecretOutput, ApiError> {
+    state.secrets.remove(input.name).map_err(log_internal)?;
+    Ok(DeleteSecretOutput {})
 }
