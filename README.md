@@ -32,7 +32,7 @@ armory install sesame
 You can also build it locally with Cargo:
 
 ```shell
-cargo build -p sesame
+cargo install --path .
 ```
 
 CLI configuration lives in `${HOME}/.sesame/config.toml`.
@@ -42,12 +42,12 @@ CLI configuration lives in `${HOME}/.sesame/config.toml`.
 The CLI reads configuration from environment variables and
 `${HOME}/.sesame/config.toml`. Environment variables take precedence.
 
-Supported CLI settings:
+Supported settings:
 
 - `url`: The server URL (`SESAME_URL`)
 - `password`: The server password (`SESAME_PASSWORD`)
 
-Example CLI config:
+Example config:
 
 ```toml
 url = "https://secrets.msmoiz.com"
@@ -57,7 +57,7 @@ password = "super-secret"
 The server reads configuration from environment variables and `sesame.toml` in
 the current working directory. Environment variables take precedence.
 
-Supported server settings:
+Supported settings:
 
 - `address`: The bind address (`SESAME_ADDRESS`)
 - `db_path`: The path to the local fjall database (`SESAME_DB_PATH`)
@@ -65,7 +65,7 @@ Supported server settings:
 - `flush_interval_secs`: The persist interval in seconds
   (`SESAME_FLUSH_INTERVAL_SECS`)
 
-Example server config:
+Example config:
 
 ```toml
 address = "127.0.0.1:3000"
