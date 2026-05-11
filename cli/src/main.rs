@@ -63,6 +63,11 @@ enum Command {
     },
     /// Browse secrets using an interactive dialog.
     Browse,
+    /// Delete a secret.
+    Delete {
+        /// The name of the secret.
+        name: String,
+    },
 }
 
 fn main() {
@@ -81,6 +86,7 @@ fn run() -> anyhow::Result<()> {
         Command::Get { name } => get(name),
         Command::Login { url } => login(url),
         Command::Browse => browse(),
+        Command::Delete { name } => delete(name),
     }
 }
 
@@ -221,4 +227,11 @@ fn browse() -> anyhow::Result<()> {
         let secret = client.get_secret(&name)?;
         println!("{}", secret.value);
     }
+}
+
+/// Deletes a secret from the store.
+fn delete(name: String) -> anyhow::Result<()> {
+    let client = configured_client()?;
+    client.delete_secret(&name)?;
+    Ok(())
 }
