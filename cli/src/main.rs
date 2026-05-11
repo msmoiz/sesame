@@ -3,7 +3,7 @@ mod config;
 
 use std::{
     fs,
-    io::{self, Read},
+    io::{self, Read, Write},
     path::PathBuf,
     str::FromStr,
 };
@@ -180,7 +180,20 @@ fn list() -> anyhow::Result<()> {
 fn get(name: String) -> anyhow::Result<()> {
     let client = configured_client()?;
     let secret = client.get_secret(&name)?;
-    println!("{}", secret.value);
+
+    match secret.encoding {
+        Encoding::Text => println!("{}", secret.value),
+        Encoding::Binary => {
+            let bytes = BASE64_STANDARD
+                .decode(secret.value.as_bytes())
+                .context("failed to decode binary secret")?;
+
+            io::stdout()
+                .write_all(&bytes)
+                .context("failed to write binary secret to stdout")?;
+        }
+    }
+
     Ok(())
 }
 
