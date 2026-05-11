@@ -58,6 +58,8 @@ async fn main() -> Result<()> {
         .keyspace(SECRET_KEYSPACE, KeyspaceCreateOptions::default)
         .context("failed to open secrets keyspace")?;
 
+    migrate_legacy_secrets(&secrets).context("failed to migrate legacy secrets")?;
+
     info!("database_path = {}", db_path.display());
     info!("listening_on = {}", address);
 
@@ -139,6 +141,57 @@ async fn authenticate(
 fn log_internal(error: impl std::fmt::Debug) -> ApiError {
     error!(?error, "internal server error");
     ApiError::InternalError
+}
+
+/// Migrates legacy secrets that were stored as plain UTF-8 bytes.
+fn migrate_legacy_secrets(secrets: &Keyspace) -> Result<()> {
+    use sesame_model::Encoding;
+
+    let mut migrated = 0usize;
+
+    for entry in secrets.iter() {
+        let (key, value) = entry
+            .into_inner()
+            .context("failed to read secret entry during migration")?;
+
+        if serde_json::from_slice::<db::Secret>(&value).is_ok() {
+            continue;
+        }
+
+        let legacy = match String::from_utf8(value.to_vec()) {
+            Ok(value) => value,
+            Err(_) => {
+                warn!(
+                    secret = %String::from_utf8_lossy(&key),
+                    "skipping secret migration for non-utf8 legacy value"
+                );
+                continue;
+            }
+        };
+
+        let migrated_secret = db::Secret {
+            value: legacy.into_bytes(),
+            encoding: Encoding::Text,
+        };
+
+        let raw = serde_json::to_vec(&migrated_secret)
+            .context("failed to serialize migrated secret value")?;
+
+        secrets
+            .insert(key.to_vec(), raw)
+            .context("failed to write migrated secret value")?;
+
+        migrated += 1;
+    }
+
+    if migrated > 0 {
+        info!(
+            migrated,
+            "migrated legacy secrets to structured storage format"
+        );
+    }
+
+    Ok(())
 }
 
 /// An API response.
