@@ -1495,6 +1495,7 @@ name = "sesame"
 version = "1.1.0"
 dependencies = [
  "anyhow",
+ "base64",
  "clap",
  "confique",
  "dirs",

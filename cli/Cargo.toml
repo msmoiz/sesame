@@ -5,6 +5,7 @@ edition.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+base64 = "0.22.1"
 clap.workspace = true
 confique.workspace = true
 dirs.workspace = true
