@@ -1492,7 +1492,7 @@ dependencies = [
 
 [[package]]
 name = "sesame"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "anyhow",
  "base64",
@@ -1509,7 +1509,7 @@ dependencies = [
 
 [[package]]
 name = "sesame-model"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "serde",
  "thiserror",
@@ -1517,7 +1517,7 @@ dependencies = [
 
 [[package]]
 name = "sesame-server"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "anyhow",
  "axum",
