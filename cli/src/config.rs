@@ -18,7 +18,7 @@ pub struct Config {
     pub url: String,
     /// The password for the server.
     #[config(env = "SESAME_PASSWORD")]
-    pub password: String,
+    pub password: Option<String>,
 }
 
 impl Config {
