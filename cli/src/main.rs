@@ -222,7 +222,7 @@ fn login(url: Option<String>) -> anyhow::Result<()> {
     let client = Client::new(config.url.clone(), password.clone());
     client.list_secrets().context("login failed")?;
 
-    config.password = password;
+    config.password = Some(password);
     config.store()?;
     Ok(())
 }
