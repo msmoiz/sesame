@@ -94,7 +94,12 @@ fn run() -> anyhow::Result<()> {
 /// Creates an API client.
 fn configured_client() -> anyhow::Result<Client> {
     let config = Config::load()?;
-    Ok(Client::new(config.url.clone(), config.password.to_owned()))
+
+    let password = config
+        .password
+        .ok_or(anyhow!("password is not set; use `sesame login` to login"))?;
+
+    Ok(Client::new(config.url.clone(), password))
 }
 
 /// Publishes a secret to the store.
@@ -217,7 +222,7 @@ fn login(url: Option<String>) -> anyhow::Result<()> {
     let client = Client::new(config.url.clone(), password.clone());
     client.list_secrets().context("login failed")?;
 
-    config.password = password;
+    config.password = Some(password);
     config.store()?;
     Ok(())
 }
