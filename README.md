@@ -32,7 +32,7 @@ armory install sesame
 You can also build it locally with Cargo:
 
 ```shell
-cargo install --path .
+cd cli && cargo install --path .
 ```
 
 CLI configuration lives in `${HOME}/.sesame/config.toml`.
