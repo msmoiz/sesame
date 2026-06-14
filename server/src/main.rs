@@ -304,6 +304,7 @@ fn publish_secret_inner(
         .secrets
         .contains_key(input.name.as_bytes())
         .map_err(log_internal)?
+        && !input.overwrite
     {
         return Err(ApiError::SecretAlreadyExists);
     }
