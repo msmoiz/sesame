@@ -48,6 +48,10 @@ enum Command {
         /// If specified, reads the secret value from standard input.
         #[arg(long, default_value_t = false)]
         stdin: bool,
+        /// If true, overwrite this secret. Otherwise, the operation will fail
+        /// if this secret already exists.
+        #[arg(long, default_value_t = false)]
+        overwrite: bool,
     },
     /// List secret names.
     List,
@@ -82,7 +86,12 @@ fn run() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Command::Publish { name, value, stdin } => publish(name, value, stdin),
+        Command::Publish {
+            name,
+            value,
+            stdin,
+            overwrite,
+        } => publish(name, value, stdin, overwrite),
         Command::List => list(),
         Command::Get { name } => get(name),
         Command::Login { url } => login(url),
@@ -103,10 +112,15 @@ fn configured_client() -> anyhow::Result<Client> {
 }
 
 /// Publishes a secret to the store.
-fn publish(name: String, value: Option<String>, stdin: bool) -> anyhow::Result<()> {
+fn publish(
+    name: String,
+    value: Option<String>,
+    stdin: bool,
+    overwrite: bool,
+) -> anyhow::Result<()> {
     let client = configured_client()?;
     let (name, value, encoding) = resolve_secret_params(name, value, stdin)?;
-    client.publish_secret(&name, &value, encoding)?;
+    client.publish_secret(&name, &value, encoding, overwrite)?;
     Ok(())
 }
 

@@ -73,6 +73,9 @@ pub struct PublishSecretInput {
     pub value: String,
     /// The encoding of the secret.
     pub encoding: Encoding,
+    /// If true, overwrite this secret. Otherwise, the operation will fail if
+    /// this secret already exists.
+    pub overwrite: bool,
 }
 
 /// The input for the health operation.

@@ -44,6 +44,7 @@ impl Client {
         name: &str,
         value: &str,
         encoding: Encoding,
+        overwrite: bool,
     ) -> anyhow::Result<PublishSecretOutput> {
         let response = self
             .http
@@ -53,6 +54,7 @@ impl Client {
                 name: name.to_owned(),
                 value: value.to_owned(),
                 encoding,
+                overwrite,
             })
             .send()
             .context("failed to publish secret")?;
