@@ -35,8 +35,11 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Command {
-    /// Store a new secret.
-    Publish {
+    /// Fetch a secret and print it to stdout.
+    Get { name: String },
+    /// Store a secret.
+    #[command(visible_alias = "publish")]
+    Set {
         /// The name of the secret. If the name starts with `@`, it is
         /// interpreted as a file path instead. In that case, the filename is
         /// used as the secret name and its contents are used as the secret
@@ -55,8 +58,13 @@ enum Command {
     },
     /// List secret names.
     List,
-    /// Fetch a secret and print it to stdout.
-    Get { name: String },
+    /// Browse secrets using an interactive dialog.
+    Browse,
+    /// Delete a secret.
+    Delete {
+        /// The name of the secret.
+        name: String,
+    },
     /// Set up server credentials.
     ///
     /// You can also use the SESAME_PASSWORD environment variable to override
@@ -65,13 +73,6 @@ enum Command {
         /// The URL for the server (default: secrets.msmoiz.com).
         #[arg(long)]
         url: Option<String>,
-    },
-    /// Browse secrets using an interactive dialog.
-    Browse,
-    /// Delete a secret.
-    Delete {
-        /// The name of the secret.
-        name: String,
     },
 }
 
@@ -86,17 +87,17 @@ fn run() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Command::Publish {
+        Command::Get { name } => get(name),
+        Command::Set {
             name,
             value,
             stdin,
             overwrite,
-        } => publish(name, value, stdin, overwrite),
+        } => set(name, value, stdin, overwrite),
         Command::List => list(),
-        Command::Get { name } => get(name),
-        Command::Login { url } => login(url),
         Command::Browse => browse(),
         Command::Delete { name } => delete(name),
+        Command::Login { url } => login(url),
     }
 }
 
@@ -111,13 +112,44 @@ fn configured_client() -> anyhow::Result<Client> {
     Ok(Client::new(config.url.clone(), password))
 }
 
+/// Reads a value from standard input.
+fn read_stdin() -> anyhow::Result<String> {
+    let mut buffer = String::new();
+
+    io::stdin()
+        .read_to_string(&mut buffer)
+        .context("failed to read stdin")?;
+
+    if let Some(stripped) = buffer.strip_suffix('\n') {
+        return Ok(stripped.strip_suffix('\r').unwrap_or(stripped).to_owned());
+    }
+
+    Ok(buffer)
+}
+
+/// Gets a secret from the store.
+fn get(name: String) -> anyhow::Result<()> {
+    let client = configured_client()?;
+    let secret = client.get_secret(&name)?;
+
+    match secret.encoding {
+        Encoding::Text => println!("{}", secret.value),
+        Encoding::Binary => {
+            let bytes = BASE64_STANDARD
+                .decode(secret.value.as_bytes())
+                .context("failed to decode binary secret")?;
+
+            io::stdout()
+                .write_all(&bytes)
+                .context("failed to write binary secret to stdout")?;
+        }
+    }
+
+    Ok(())
+}
+
 /// Publishes a secret to the store.
-fn publish(
-    name: String,
-    value: Option<String>,
-    stdin: bool,
-    overwrite: bool,
-) -> anyhow::Result<()> {
+fn set(name: String, value: Option<String>, stdin: bool, overwrite: bool) -> anyhow::Result<()> {
     let client = configured_client()?;
     let (name, value, encoding) = resolve_secret_params(name, value, stdin)?;
     client.publish_secret(&name, &value, encoding, overwrite)?;
@@ -170,21 +202,6 @@ fn resolve_secret_params(
     }
 }
 
-/// Reads a value from standard input.
-fn read_stdin() -> anyhow::Result<String> {
-    let mut buffer = String::new();
-
-    io::stdin()
-        .read_to_string(&mut buffer)
-        .context("failed to read stdin")?;
-
-    if let Some(stripped) = buffer.strip_suffix('\n') {
-        return Ok(stripped.strip_suffix('\r').unwrap_or(stripped).to_owned());
-    }
-
-    Ok(buffer)
-}
-
 /// Lists secrets in the store.
 fn list() -> anyhow::Result<()> {
     let client = configured_client()?;
@@ -192,52 +209,6 @@ fn list() -> anyhow::Result<()> {
     for secret in output.secrets {
         println!("{secret}");
     }
-    Ok(())
-}
-
-/// Gets a secret from the store.
-fn get(name: String) -> anyhow::Result<()> {
-    let client = configured_client()?;
-    let secret = client.get_secret(&name)?;
-
-    match secret.encoding {
-        Encoding::Text => println!("{}", secret.value),
-        Encoding::Binary => {
-            let bytes = BASE64_STANDARD
-                .decode(secret.value.as_bytes())
-                .context("failed to decode binary secret")?;
-
-            io::stdout()
-                .write_all(&bytes)
-                .context("failed to write binary secret to stdout")?;
-        }
-    }
-
-    Ok(())
-}
-
-/// Sets up server credentials.
-fn login(url: Option<String>) -> anyhow::Result<()> {
-    let mut config = Config::load()?;
-
-    let password = Password::new("Sesame password")
-        .without_confirmation()
-        .prompt()
-        .context("failed to read password")?;
-
-    if password.is_empty() {
-        bail!("password cannot be empty");
-    }
-
-    if let Some(url) = url {
-        config.url = url;
-    }
-
-    let client = Client::new(config.url.clone(), password.clone());
-    client.list_secrets().context("login failed")?;
-
-    config.password = Some(password);
-    config.store()?;
     Ok(())
 }
 
@@ -279,5 +250,30 @@ fn browse() -> anyhow::Result<()> {
 fn delete(name: String) -> anyhow::Result<()> {
     let client = configured_client()?;
     client.delete_secret(&name)?;
+    Ok(())
+}
+
+/// Sets up server credentials.
+fn login(url: Option<String>) -> anyhow::Result<()> {
+    let mut config = Config::load()?;
+
+    let password = Password::new("Sesame password")
+        .without_confirmation()
+        .prompt()
+        .context("failed to read password")?;
+
+    if password.is_empty() {
+        bail!("password cannot be empty");
+    }
+
+    if let Some(url) = url {
+        config.url = url;
+    }
+
+    let client = Client::new(config.url.clone(), password.clone());
+    client.list_secrets().context("login failed")?;
+
+    config.password = Some(password);
+    config.store()?;
     Ok(())
 }
